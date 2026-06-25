@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Provenance Guard</title>
+  <style>
+    :root {
+      --bg: #0f1320; --card: #1a2032; --ink: #e8ecf5; --muted: #9aa6c0;
+      --line: #2b3450; --accent: #6ea8fe;
+      --ai: #e5534b; --human: #3fb950; --uncertain: #d4a72c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--ink); line-height: 1.5;
+    }
+    .wrap { max-width: 780px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    h2 { font-size: 16px; margin: 0 0 14px; color: var(--accent); }
+    .sub { color: var(--muted); margin: 0 0 28px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px;
+    }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+    textarea, input {
+      width: 100%; background: #0c1020; color: var(--ink); border: 1px solid var(--line);
+      border-radius: 8px; padding: 10px 12px; font: inherit; resize: vertical;
+    }
+    textarea { min-height: 120px; }
+    .row { margin-bottom: 14px; }
+    .radios { display: flex; gap: 18px; margin-bottom: 14px; font-size: 14px; }
+    .radios label { display: flex; align-items: center; gap: 6px; color: var(--ink); margin: 0; cursor: pointer; }
+    .radios input { width: auto; }
+    button {
+      background: var(--accent); color: #06122e; border: 0; border-radius: 8px;
+      padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .badge {
+      display: inline-block; background: rgba(63,185,80,.15); color: var(--human);
+      border: 1px solid var(--human); border-radius: 8px; padding: 8px 12px;
+      font-size: 13px; font-weight: 600; margin-bottom: 12px;
+    }
+    .label-box {
+      border-radius: 10px; padding: 16px; margin-top: 6px; font-size: 15px;
+      border-left: 5px solid var(--muted); background: #11162a; white-space: pre-wrap;
+    }
+    .label-box.likely_ai { border-left-color: var(--ai); }
+    .label-box.likely_human { border-left-color: var(--human); }
+    .label-box.uncertain { border-left-color: var(--uncertain); }
+    .meter { height: 10px; border-radius: 6px; background: #0c1020; overflow: hidden; margin: 14px 0 6px; border: 1px solid var(--line); }
+    .meter > span { display: block; height: 100%; background: linear-gradient(90deg, var(--human), var(--uncertain), var(--ai)); }
+    .stats { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 10px; }
+    .stats b { color: var(--ink); }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .pill.likely_ai { background: rgba(229,83,75,.15); color: var(--ai); }
+    .pill.likely_human { background: rgba(63,185,80,.15); color: var(--human); }
+    .pill.uncertain { background: rgba(212,167,44,.15); color: var(--uncertain); }
+    .hidden { display: none; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .err { color: var(--ai); font-size: 14px; margin-top: 8px; }
+    .ok { color: var(--human); font-size: 14px; margin-top: 8px; }
+    code { background: #0c1020; padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+    a { color: var(--accent); }
+    hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .stat-tile { background: #0c1020; border: 1px solid var(--line); border-radius: 8px; padding: 12px; text-align: center; }
+    .stat-tile .n { font-size: 22px; font-weight: 700; }
+    .stat-tile .l { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🛡️ Provenance Guard</h1>
+    <p class="sub">Check whether content reads as human-written or AI-generated. Detection is never certain — creators can appeal or earn a verified-human credential.</p>
+
+    <!-- ANALYZE -->
+    <div class="card">
+      <h2>Analyze content</h2>
+      <div class="row">
+        <label for="creator">Creator ID</label>
+        <input id="creator" value="demo-creator" />
+      </div>
+      <div class="radios">
+        <label><input type="radio" name="ctype" value="text" checked onchange="toggleType()" /> Text</label>
+        <label><input type="radio" name="ctype" value="image_metadata" onchange="toggleType()" /> Image metadata</label>
+      </div>
+
+      <div id="textMode">
+        <div class="row">
+          <label for="text">Content</label>
+          <textarea id="text" placeholder="Paste a poem, story excerpt, or blog post…"></textarea>
+        </div>
+      </div>
+
+      <div id="imgMode" class="hidden">
+        <div class="row"><label>Title</label><input id="mTitle" placeholder="Autumn Reverie" /></div>
+        <div class="row"><label>Medium</label><input id="mMedium" placeholder="oil on canvas" /></div>
+        <div class="row"><label>Tags (comma-separated)</label><input id="mTags" placeholder="landscape, autumn" /></div>
+        <div class="row"><label>Description</label><textarea id="mDesc" placeholder="Describe the work…"></textarea></div>
+      </div>
+
+      <button id="submitBtn" onclick="submitContent()">Analyze</button>
+      <div id="submitErr" class="err hidden"></div>
+    </div>
+
+    <!-- RESULT -->
+    <div id="result" class="card hidden">
+      <div id="provBadge" class="badge hidden"></div>
+      <div>
+        <span id="pill" class="pill"></span>
+        <span class="muted" id="cid"></span>
+      </div>
+      <div class="meter"><span id="meterFill" style="width:0%"></span></div>
+      <div class="muted" id="confLine"></div>
+      <div id="labelBox" class="label-box"></div>
+      <div class="stats">
+        <div>LLM: <b id="llm"></b></div>
+        <div>Stylometric: <b id="stylo"></b></div>
+        <div>Lexical: <b id="lex"></b></div>
+        <div>Stylometric reliable: <b id="relia"></b></div>
+      </div>
+
+      <hr />
+      <div class="row">
+        <label for="reason">Disagree? Appeal it (status → under review)</label>
+        <textarea id="reason" style="min-height:70px" placeholder="Explain why you believe this classification is wrong…"></textarea>
+      </div>
+      <button class="ghost" id="appealBtn" onclick="submitAppeal()">Submit appeal</button>
+      <div id="appealMsg" class="ok hidden"></div>
+    </div>
+
+    <!-- VERIFY -->
+    <div class="card">
+      <h2>Earn a verified-human credential</h2>
+      <p class="muted" style="margin-top:0">Submit a personal writing sample (25+ words). If it reads as clearly human, the account earns a credential shown above future submissions.</p>
+      <div class="row"><label for="vCreator">Creator ID</label><input id="vCreator" value="demo-creator" /></div>
+      <div class="row"><label for="vSample">Writing sample</label><textarea id="vSample" style="min-height:90px" placeholder="Write a few sentences in your own voice…"></textarea></div>
+      <button class="ghost" id="verifyBtn" onclick="verifyCreator()">Request verification</button>
+      <div id="verifyMsg" class="ok hidden"></div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="card">
+      <h2>Analytics dashboard</h2>
+      <button class="ghost" onclick="loadAnalytics()">Refresh analytics</button>
+      <div id="analytics" class="hidden" style="margin-top:14px"></div>
+    </div>
+
+    <p class="muted">Raw audit log (JSON): <a href="/log" target="_blank">/log</a> · Analytics (JSON): <a href="/analytics" target="_blank">/analytics</a></p>
+  </div>
+
+  <script>
+    let lastContentId = null;
+
+    function toggleType() {
+      const t = document.querySelector('input[name=ctype]:checked').value;
+      document.getElementById('textMode').classList.toggle('hidden', t !== 'text');
+      document.getElementById('imgMode').classList.toggle('hidden', t !== 'image_metadata');
+    }
+
+    async function submitContent() {
+      const creator_id = document.getElementById('creator').value;
+      const ctype = document.querySelector('input[name=ctype]:checked').value;
+      const btn = document.getElementById('submitBtn');
+      const err = document.getElementById('submitErr');
+      err.classList.add('hidden');
+
+      let payload = { creator_id, content_type: ctype };
+      if (ctype === 'text') {
+        payload.text = document.getElementById('text').value;
+      } else {
+        payload.metadata = {
+          title: document.getElementById('mTitle').value,
+          medium: document.getElementById('mMedium').value,
+          tags: document.getElementById('mTags').value.split(',').map(s => s.trim()).filter(Boolean),
+          description: document.getElementById('mDesc').value
+        };
+      }
+
+      btn.disabled = true; btn.textContent = 'Analyzing…';
+      try {
+        const res = await fetch('/submit', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) { err.textContent = data.error || ('Error ' + res.status); err.classList.remove('hidden'); return; }
+        renderResult(data);
+      } catch (e) {
+        err.textContent = 'Request failed: ' + e.message; err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Analyze';
+      }
+    }
+
+    function renderResult(data) {
+      lastContentId = data.content_id;
+      document.getElementById('result').classList.remove('hidden');
+
+      const prov = document.getElementById('provBadge');
+      if (data.provenance && data.provenance.verified) {
+        prov.textContent = '✅ Verified human creator';
+        prov.classList.remove('hidden');
+      } else { prov.classList.add('hidden'); }
+
+      const r = data.attribution_result;
+      const pill = document.getElementById('pill');
+      pill.className = 'pill ' + r;
+      pill.textContent = r.replace('_', ' ');
+      document.getElementById('cid').textContent = ' · ' + data.content_type + ' · id: ' + data.content_id;
+
+      const pct = Math.round(data.confidence_score * 100);
+      document.getElementById('meterFill').style.width = pct + '%';
+      document.getElementById('confLine').textContent =
+        'Confidence the content is AI-generated: ' + pct + '% (0% = certainly human, 100% = certainly AI)';
+
+      const box = document.getElementById('labelBox');
+      box.className = 'label-box ' + r;
+      box.textContent = data.transparency_label;
+
+      document.getElementById('llm').textContent = data.signals.llm_score;
+      document.getElementById('stylo').textContent = data.signals.stylometric_score;
+      document.getElementById('lex').textContent = data.signals.lexical_score;
+      document.getElementById('relia').textContent = data.signals.stylometric_reliable;
+
+      document.getElementById('appealMsg').classList.add('hidden');
+      document.getElementById('reason').value = '';
+    }
+
+    async function submitAppeal() {
+      if (!lastContentId) return;
+      const creator_reasoning = document.getElementById('reason').value;
+      const btn = document.getElementById('appealBtn');
+      const msg = document.getElementById('appealMsg');
+      msg.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Submitting…';
+      try {
+        const res = await fetch('/appeal', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content_id: lastContentId, creator_reasoning })
+        });
+        const data = await res.json();
+        msg.className = res.ok ? 'ok' : 'err';
+        msg.textContent = res.ok ? ('✓ ' + data.message + ' (status: ' + data.status + ')') : (data.error || 'Error');
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Submit appeal';
+      }
+    }
+
+    async function verifyCreator() {
+      const creator_id = document.getElementById('vCreator').value;
+      const sample_text = document.getElementById('vSample').value;
+      const btn = document.getElementById('verifyBtn');
+      const msg = document.getElementById('verifyMsg');
+      msg.classList.add('hidden');
+      btn.disabled = true; btn.textContent = 'Checking…';
+      try {
+        const res = await fetch('/verify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ creator_id, sample_text })
+        });
+        const data = await res.json();
+        msg.className = (res.ok && data.verified) ? 'ok' : 'err';
+        msg.textContent = (data.message || data.error) +
+          (data.sample_attribution ? ' (sample read as ' + data.sample_attribution + ')' : '');
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Request verification';
+      }
+    }
+
+    async function loadAnalytics() {
+      const box = document.getElementById('analytics');
+      const a = await (await fetch('/analytics')).json();
+      const d = a.result_distribution;
+      box.innerHTML = `
+        <div class="grid">
+          <div class="stat-tile"><div class="n" style="color:var(--ai)">${d.likely_ai.count}</div><div class="l">Likely AI (${d.likely_ai.pct}%)</div></div>
+          <div class="stat-tile"><div class="n" style="color:var(--uncertain)">${d.uncertain.count}</div><div class="l">Uncertain (${d.uncertain.pct}%)</div></div>
+          <div class="stat-tile"><div class="n" style="color:var(--human)">${d.likely_human.count}</div><div class="l">Likely human (${d.likely_human.pct}%)</div></div>
+        </div>
+        <div class="stats" style="margin-top:14px">
+          <div>Total classifications: <b>${a.total_classifications}</b></div>
+          <div>Appeals filed: <b>${a.appeals_filed}</b></div>
+          <div>Appeal rate: <b>${(a.appeal_rate * 100).toFixed(1)}%</b></div>
+        </div>
+        <div class="stats">
+          <div>Avg confidence — AI: <b>${a.avg_confidence_by_result.likely_ai ?? '—'}</b></div>
+          <div>Uncertain: <b>${a.avg_confidence_by_result.uncertain ?? '—'}</b></div>
+          <div>Human: <b>${a.avg_confidence_by_result.likely_human ?? '—'}</b></div>
+        </div>`;
+      box.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

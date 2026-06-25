@@ -14,7 +14,7 @@ In the submission flow, raw text enters `POST /submit`, passes the rate limiter 
 
 ### Architecture narrative (component by component)
 
-When a creator submits a piece of text, the system receives it through the `POST /submit` endpoint. The request must include the text content and a `creator_id`. Before any analysis runs, the request passes through a **rate limiter**, which rejects the submission with `429` if the client has exceeded its allowed number of requests, and **input validation**, which confirms the required fields are present and the text meets the minimum length to analyze — **at least 15 words** — rejecting anything shorter with `400`. (Submissions that clear 15 words but are still under 3 sentences are accepted but flagged low-reliability; see the edge cases below.) This protects the system from flooding and protects the downstream Groq API quota.
+When a creator submits a piece of text, the system receives it through the `POST /submit` endpoint. The request must include the text content and a `creator_id`. Before any analysis runs, the request passes through a **rate limiter**, which rejects the submission with `429` if the client has exceeded its allowed number of requests, and **input validation**, which confirms the required fields are present and the text meets the minimum length to analyze — **at least 10 words** — rejecting anything shorter with `400`. (Submissions that clear 10 words but are still under 3 sentences are accepted but flagged low-reliability; see the edge cases below.) This protects the system from flooding and protects the downstream Groq API quota.
 
 Once accepted, the raw text is passed to the **detection pipeline**, which runs two independent signals. **Signal 1** sends the text to a Groq-hosted LLM, which returns a score reflecting how AI-generated the writing appears. **Signal 2** runs pure-Python stylometric calculations on the same text and returns a structural score. The two signals measure genuinely different properties — one semantic, one statistical — so combining them is more informative than either alone.
 
@@ -135,7 +135,7 @@ Request: `{ "text": "<content>", "creator_id": "<id>" }`
 
 Response: `{ content_id, creator_id, attribution_result, confidence_score, transparency_label, status, signals: { llm_score, stylometric_score } }`
 
-Errors: `400` (missing/invalid fields, or text shorter than 15 words), `429` (rate limit exceeded).
+Errors: `400` (missing/invalid fields, or text shorter than 10 words), `429` (rate limit exceeded).
 
 ### POST /appeal
 Contest a previous classification.
@@ -236,7 +236,7 @@ The system will handle these specific cases poorly. Each is named with the signa
 
 2. **Non-native English speakers and formal academic prose.** Clean, even, formally-worded human writing reads as "too polished" to the LLM and as uniform to stylometrics — a false-positive risk. This is the primary scenario the asymmetric thresholds are designed to absorb (it lands in `uncertain`, not `likely_ai`).
 
-3. **Very short submissions.** Text shorter than 15 words is rejected outright with `400`, because neither signal is meaningful on a fragment. Text that clears 15 words but is still under 3 sentences is accepted, but the stylometric statistics are dominated by noise (variance and TTR are unstable), so the stylometric signal returns a neutral 0.5 and flags low reliability. In that range the verdict leans on the LLM alone — which is itself unreliable on so little text — so such results should be treated with low trust.
+3. **Very short submissions.** Text shorter than 10 words is rejected outright with `400`, because neither signal is meaningful on a fragment. Text that clears 10 words but is still under 3 sentences is accepted, but the stylometric statistics are dominated by noise (variance and TTR are unstable), so the stylometric signal returns a neutral 0.5 and flags low reliability. In that range the verdict leans on the LLM alone — which is itself unreliable on so little text — so such results should be treated with low trust.
 
 4. **Lightly-edited AI output (human–AI collaboration).** Text that was AI-drafted and then revised by a human is genuinely ambiguous — it is neither cleanly human nor cleanly AI. By design this lands in the `uncertain` band rather than being forced into a binary call. This is a feature, not a failure, but it means the system cannot resolve the most common real-world case definitively.
 
