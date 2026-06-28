@@ -4,6 +4,10 @@ A backend service that any creative-sharing platform can plug into to decide whe
 
 The full pre-implementation spec lives in [planning.md](planning.md). This README is the canonical record of what was built.
 
+## 🎥 Walkthrough video
+
+A short portfolio walkthrough of the system working end-to-end: **https://www.loom.com/share/9592429ce5764fffadfe7491187c0f61**
+
 ---
 
 ## Quick start
